@@ -106,12 +106,46 @@ int APS5_VABI sceSystemServiceHideSplashScreen(void) {
  return SYSTEM_SERVICE_OK;
 }
 
+// A system language number (0-29, for example 2 for French), or -1 when the text is not one.
+static int ParseLanguage(const char* text) {
+ if (text == nullptr || *text == '\0') return -1;
+ char* end = nullptr;
+ const long number = std::strtol(text, &end, 10);
+ if (end == text) return -1;
+ while (*end == ' ' || *end == '\t' || *end == '\r' || *end == '\n') ++end;
+ if (*end != '\0' || number < 0 || number > 29) return -1;
+ return static_cast<int>(number);
+}
+
+// The system language the title sees: the RTY_LANGUAGE variable, else "language=" in RyGT.ini
+// (next to the game, like the game's other settings), else English (US). Read once; a value that
+// is not a language number is ignored.
+static int ConfiguredLanguage() {
+ static const int language = [] {
+  int chosen = ParseLanguage(std::getenv("RTY_LANGUAGE"));
+  if (chosen < 0) {
+   if (std::FILE* ini = std::fopen("RyGT.ini", "r")) {
+    char line[256];
+    while (std::fgets(line, sizeof(line), ini)) {
+     if (std::strncmp(line, "language=", 9) == 0) {
+      const int fromFile = ParseLanguage(line + 9);
+      if (fromFile >= 0) chosen = fromFile;
+     }
+    }
+    std::fclose(ini);
+   }
+  }
+  return chosen >= 0 ? chosen : SYSTEM_SERVICE_PARAM_LANG_ENGLISH_US;
+ }();
+ return language;
+}
+
 int APS5_VABI sceSystemServiceParamGetInt(int paramId, int* value) {
  if (value == nullptr) {
   return SYSTEM_SERVICE_ERROR_PARAMETER;
  }
  switch (paramId) {
-  case SYSTEM_SERVICE_PARAM_ID_LANG: *value = SYSTEM_SERVICE_PARAM_LANG_ENGLISH_US; break;
+  case SYSTEM_SERVICE_PARAM_ID_LANG: *value = ConfiguredLanguage(); break;
   case SYSTEM_SERVICE_PARAM_ID_DATE_FORMAT: *value = SYSTEM_SERVICE_PARAM_DATE_FORMAT_DDMMYYYY; break;
   case SYSTEM_SERVICE_PARAM_ID_TIME_FORMAT: *value = SYSTEM_SERVICE_PARAM_TIME_FORMAT_24HOUR; break;
   case SYSTEM_SERVICE_PARAM_ID_TIME_ZONE: *value = 0; break;

@@ -86,6 +86,7 @@ still work so that previously configured setups keep running:
 | `RTY_INPUT_CONFIG` | Path to the input mapping ini (default `ryty-input.ini` next to the executable). |
 | `RTY_SHADER_CACHE_DIR`, `RTY_NO_SHADER_CACHE` | Shader disk cache location / disable switch. |
 | `RTY_ENTITLEMENTS` | Entitlement data ini override. |
+| `RTY_LANGUAGE` | System language the game sees, as a PlayStation language number: `1` English (US, the default), `2` French. Without it, `language=` in `RyGT.ini` is used. |
 | `RTY_FMOD_SILENT`, `RTY_FMOD_NOSOUND` | Audio fallback switches used by the FMOD compatibility layer. |
 | `RTY_NET_ENABLE=1` | Experimental: activate the RytyNet online-mode bridge (see [RytyNet](RYTNET.md)). `0` forces it off. |
 | `RTY_NET_LOG=1` | Log RytyNet decisions and requests to stderr (`[rytynet]` lines). |
