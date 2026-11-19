@@ -16,6 +16,10 @@ constexpr std::uint16_t VendorFanatec = 0x0EB7;
 constexpr std::uint16_t VendorMoza = 0x346E;
 constexpr std::uint16_t VendorSimagic = 0x3670;  // Simagic EVO bases
 constexpr std::uint16_t VendorThrustmaster = 0x044F;
+// DIY direct-drive bases built on OpenFFBoard (pid.codes vendor 0x1209). The Odrive-Wheel firmware
+// (MKS XDrive Mini / ODESC) reports itself as 1209:0d40 "ODrive-Wheel HID" and is not typed as a wheel by SDL.
+constexpr std::uint16_t VendorPidCodes = 0x1209;
+constexpr std::uint16_t ProductOdriveWheel = 0x0D40;
 
 // Logitech wheels in PlayStation mode (G29, G923 PS, G27, G25, Driving Force GT, G PRO PS).
 constexpr std::array LogitechPlayStationWheels{
@@ -44,6 +48,19 @@ bool isThrustmasterWheel(std::uint16_t vendor, SDL_JoystickType type) {
 std::string lower(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return value;
+}
+
+// Reads "a,b,c,..." into `out` (up to its size); missing or invalid entries keep their value.
+// A negative number means "none" for a button list.
+void parseList(const char* text, std::array<int, 8>& out) {
+    if (text == nullptr) return;
+    for (std::size_t i = 0; i < out.size() && *text != '\0'; ++i) {
+        char* end = nullptr;
+        const long value = std::strtol(text, &end, 10);
+        if (end == text) break;
+        out[i] = static_cast<int>(value);
+        text = *end == ',' ? end + 1 : end;
+    }
 }
 
 // 0..1 travel of a pedal axis from its resting position. A pedal that rests at one end of the
@@ -78,6 +95,10 @@ void applyStick(Pad::InputControl control, std::array<bool, 4>& negative, std::a
 WheelInput::WheelInput(const Pad::InputConfig& config)
     : userBindings(config.joystickBindings), userControls(config.joystickControls), userButtons(config.joystickButtons) {
     if (const char* spring = std::getenv("RTY_WHEEL_SPRING")) springStrength = std::clamp(std::atoi(spring), 0, 100);
+    if (const char* name = std::getenv("RTY_SHIFTER_NAME")) shifterName = lower(name);
+    parseList(std::getenv("RTY_SHIFTER_BUTTONS"), shifterButtons);
+    parseList(std::getenv("RTY_SHIFTER_BITS"), shifterBits);
+    for (int& bit : shifterBits) bit = std::clamp(bit, 0, 7);
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     if ((SDL_WasInit(SDL_INIT_JOYSTICK) & SDL_INIT_JOYSTICK) == 0 && SDL_InitSubSystem(SDL_INIT_JOYSTICK) != 0) {
         APS5_LOG_ERR("Pad: SDL joystick init failed: %s", SDL_GetError());
@@ -97,6 +118,7 @@ bool WheelInput::IsWheel(int deviceIndex) {
     if (SDL_JoystickGetDeviceType(deviceIndex) == SDL_JOYSTICK_TYPE_WHEEL) return true;
     const std::uint16_t vendor = SDL_JoystickGetDeviceVendor(deviceIndex);
     const std::uint16_t product = SDL_JoystickGetDeviceProduct(deviceIndex);
+    if (vendor == VendorPidCodes && product == ProductOdriveWheel) return true;
     return vendor == VendorMoza || vendor == VendorSimagic || vendor == VendorFanatec || isLogitechWheel(vendor, product) ||
            isThrustmasterWheel(vendor, SDL_JoystickGetDeviceType(deviceIndex));
 }
@@ -400,6 +422,18 @@ bool WheelInput::Update() {
         else if (binding.control == Pad::InputControl::TouchRight) next.touchRight = true;
         else applyStick(binding.control, next.negative, next.positive);
     }
+    // A separate H-shifter engages a gear by holding down one button.
+    if (!shifterName.empty()) {
+        for (const auto& device : devices) {
+            if (device->lowerName.find(shifterName) == std::string::npos) continue;
+            for (std::size_t gear = 0; gear < shifterButtons.size(); ++gear) {
+                if (shifterButtons[gear] >= 0 && SDL_JoystickGetButton(device->joystick, shifterButtons[gear]) != 0) {
+                    next.gear = static_cast<std::uint8_t>(next.gear | (1u << shifterBits[gear]));
+                }
+            }
+            break;
+        }
+    }
     WheelForces wanted;
     std::chrono::steady_clock::time_point lastCommand;
     {
@@ -455,6 +489,7 @@ WheelState WheelInput::State() const {
     state.brake = sample.brake;
     state.clutch = sample.clutch;
     state.buttons = sample.buttons;
+    state.gear = sample.gear;
     return state;
 }
 

@@ -337,7 +337,7 @@ int APS5_VABI scePadReadStateExt(int handle, PadData* data) {
   std::memcpy(data->device_unique_data + 2, &accelerator, 2);
   std::memcpy(data->device_unique_data + 4, &brake, 2);
   data->device_unique_data[7] = 0xff;
-  data->device_unique_data[8] = 0;
+  data->device_unique_data[8] = wheel.gear;
   data->device_unique_data[10] = static_cast<std::uint8_t>(0xff - (wheel.clutch >> 8));
  }
  data->orientation_w = 1.0f;

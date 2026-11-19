@@ -24,6 +24,8 @@ struct WheelState {
     std::uint16_t brake = 0;
     std::uint16_t clutch = 0;
     std::uint32_t buttons = 0;
+    // H-shifter: one bit per gear (see WheelInput's RTY_SHIFTER_* settings), 0 in neutral.
+    std::uint8_t gear = 0;
 };
 
 // Forces the title asks the wheel to play, decoded from its force-feedback reports.
@@ -107,6 +109,7 @@ private:
         std::uint16_t throttle = 0;
         std::uint16_t brake = 0;
         std::uint16_t clutch = 0;
+        std::uint8_t gear = 0;
         std::array<bool, 4> negative{};
         std::array<bool, 4> positive{};
         bool touchLeft = false;
@@ -136,6 +139,11 @@ private:
     WheelForces forces{};
     std::chrono::steady_clock::time_point lastDriveCommand{}, nextCheck{};
     int springStrength = 30;
+    // Separate H-shifter (RTY_SHIFTER_NAME, RTY_SHIFTER_BUTTONS, RTY_SHIFTER_BITS): the button
+    // that engages gears 1-7 and reverse, and the bit each one sets in the gear byte.
+    std::string shifterName = "gear shift";
+    std::array<int, 8> shifterButtons{0, 1, 2, 3, 4, 5, 6, 7};
+    std::array<int, 8> shifterBits{0, 1, 2, 3, 4, 5, 6, 7};
 };
 
 #endif
